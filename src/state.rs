@@ -238,7 +238,7 @@ impl IsInitialized for Signature {
 
 impl Signature {
     /// Struct size
-    pub const LEN: usize = 150;
+    pub const LEN: usize = 139;
     /// Create new validator entity
     pub fn new(index: u64,
                bridge: Pubkey,

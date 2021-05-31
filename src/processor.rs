@@ -69,11 +69,12 @@ impl Processor {
 
     fn check_and_get_lock_account_seed(
         program_id: &Pubkey,
-        index: u64,
+        source: &str,
+        lock_id: u64,
         bridge_authority: &Pubkey,
         lock_account: &Pubkey,
     ) -> Result<String, ProgramError> {
-        let seed = format!("lock_{}", index);
+        let seed = format!("lock_{}_{}", source, lock_id);
         let expected_lock_account =
             Pubkey::create_with_seed(bridge_authority, seed.as_str(), program_id)?;
         if expected_lock_account != *lock_account {
@@ -84,12 +85,13 @@ impl Processor {
 
     fn check_and_get_signature_account_seed(
         program_id: &Pubkey,
-        lock_index: u64,
+        source: &str,
+        lock_id: u64,
         index: u64,
         bridge_authority: &Pubkey,
         signature_account: &Pubkey,
     ) -> Result<String, ProgramError> {
-        let seed = format!("signature_{}_{}", lock_index, index);
+        let seed = format!("signature_{}_{}_{}", source, lock_id, index);
         let expected_signature_account =
             Pubkey::create_with_seed(bridge_authority, seed.as_str(), program_id)?;
         if expected_signature_account != *signature_account {
@@ -323,13 +325,13 @@ impl Processor {
             return Err(ProgramError::UninitializedAccount);
         }
 
-        let mut blockchain_account_data: Blockchain = Blockchain::try_from_slice(&blockchain_account_info.data.borrow_mut())?;
+        let blockchain_account_data: Blockchain = Blockchain::try_from_slice(&blockchain_account_info.data.borrow())?;
         if !blockchain_account_data.is_initialized() {
             msg!("Blockchain account is not initialized");
             return Err(ProgramError::UninitializedAccount);
         }
 
-        let mut validator_account_data: Validator = Validator::try_from_slice(&validator_account_info.data.borrow_mut())?;
+        let validator_account_data: Validator = Validator::try_from_slice(&validator_account_info.data.borrow())?;
         if !validator_account_data.is_initialized() {
             msg!("Blockchain account is not initialized");
             return Err(ProgramError::UninitializedAccount);
@@ -340,8 +342,8 @@ impl Processor {
             return Err(ProgramError::InvalidArgument);
         }
 
-        let destination_hex = Self::str_to_hex(destination);
-        if validator_account_data.blockchain_id != destination_hex {
+        let source_hex = Self::str_to_hex(source);
+        if validator_account_data.blockchain_id != source_hex {
             msg!("Invalid validator type");
             return Err(ProgramError::InvalidArgument);
         }
@@ -354,38 +356,44 @@ impl Processor {
 
         let lock_seed = Self::check_and_get_lock_account_seed(
             program_id,
-            bridge_account_data.locks,
+            source,
+            lock_id,
             bridge_authority_info.key,
-            validator_account_info.key
+            lock_account_info.key
         )?;
 
-        if lock_account_info.data_is_empty() {
-            Self::create_account_with_seed(
-                payer_info,
-                lock_account_info,
-                bridge_authority_info,
-                lock_seed,
-                Lock::LEN,
-                rent,
-                program_id,
-                bridge_account_info.key,
-                bump_seed,
-            )?;
+        let mut lock_account_data = match  lock_account_info.data_is_empty() {
+            true => {
+                Self::create_account_with_seed(
+                    payer_info,
+                    lock_account_info,
+                    bridge_authority_info,
+                    lock_seed,
+                    Lock::LEN,
+                    rent,
+                    program_id,
+                    bridge_account_info.key,
+                    bump_seed,
+                )?;
 
-            let lock = Lock::new(
-                bridge_account_data.locks,
-                lock_id,
-                *bridge_account_info.key,
-                token_source_address,
-                token_source,
-                source,
-                recipient,
-                destination,
-                amount);
-            lock.serialize(&mut *lock_account_info.data.borrow_mut())?;
-        }
+                let index = bridge_account_data.locks;
+                bridge_account_data.locks += 1;
+                bridge_account_data.serialize(&mut *bridge_account_info.data.borrow_mut())?;
 
-        let mut lock_account_data: Lock = Lock::try_from_slice(&lock_account_info.data.borrow_mut())?;
+                Lock::new(
+                    index,
+                    lock_id,
+                    *bridge_account_info.key,
+                    token_source_address,
+                    token_source,
+                    source,
+                    recipient,
+                    destination,
+                    amount)
+            },
+            false => Lock::try_from_slice(&lock_account_info.data.borrow_mut())?
+        };
+
         if !lock_account_data.is_initialized() {
             msg!("Lock account is not initialized");
             return Err(ProgramError::UninitializedAccount);
@@ -393,9 +401,10 @@ impl Processor {
 
         let signature_seed = Self::check_and_get_signature_account_seed(
             program_id,
-            lock_account_data.lock_id,
+            source,
+            lock_id,
             lock_account_data.signatures,
-            validator_account_info.key,
+            bridge_authority_info.key,
             signature_account_info.key
         )?;
 
@@ -418,6 +427,9 @@ impl Processor {
             signature,
             *validator_account_info.key);
         signature.serialize(&mut *signature_account_info.data.borrow_mut())?;
+
+        lock_account_data.signatures += 1;
+        lock_account_data.serialize(&mut *lock_account_info.data.borrow_mut())?;
 
         Ok(())
     }

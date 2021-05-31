@@ -1,15 +1,16 @@
 #![cfg(feature = "test-bpf")]
 
-use solbridge_master_contract::state::{Bridge, Blockchain, Validator};
-use solbridge_master_contract::*;
-use borsh::{BorshDeserialize, BorshSerialize};
-use solana_program::{program_pack::Pack, pubkey::Pubkey, system_instruction};
+use borsh::{BorshDeserialize};
+use solana_program::{pubkey::Pubkey, system_instruction};
 use solana_program_test::*;
-use solana_sdk::account::Account;
 use solana_sdk::{
     signature::{Keypair, Signer},
     transaction::Transaction,
 };
+use solana_sdk::account::Account;
+
+use solbridge_master_contract::*;
+use solbridge_master_contract::state::{Blockchain, Bridge, Lock, Validator, Signature, SigType};
 
 pub fn program_test() -> ProgramTest {
     ProgramTest::new(
@@ -179,13 +180,37 @@ impl BridgeContext {
         validator_account
     }
 
-    pub async fn add_signature(&self, program_context: &mut ProgramTestContext, blockchain_pubkey: &Pubkey, validator_pubkey: &Pubkey) -> Pubkey {
+    pub async fn add_signature(&self, program_context: &mut ProgramTestContext,
+                               signature: [u8; 65],
+                               token_source: String,
+                               token_source_address: [u8; 32],
+                               source: String,
+                               lock_id: u64,
+                               destination: String,
+                               recipient: [u8; 32],
+                               amount: u64,
+                               validator_index: u64) -> (Pubkey, Pubkey) {
+
+        let lock_pubkey =
+            Pubkey::create_with_seed(&self.bridge_authority, format!("lock_{}_{}", source, lock_id).as_str(), &id()).unwrap();
+        let lock_account = program_context
+            .banks_client
+            .get_account(lock_pubkey)
+            .await
+            .expect("account not found");
+        let signature_index: u64 = match lock_account {
+            Some(l) => Lock::try_from_slice(&l.data).unwrap().signatures,
+            None => 0
+        };
+
         let blockchain_pubkey =
-            Pubkey::create_with_seed(&self.bridge_authority, format!("blockchain_{}", blockchain_id_str).as_str(), &id()).unwrap();
-        let blockchain_account = get_account(program_context, &blockchain_pubkey).await;
-        let blockchain_data: Blockchain = Blockchain::try_from_slice(&blockchain_account.data).unwrap();
-        let validator_account =
-            Pubkey::create_with_seed(&self.bridge_authority, format!("validator_{}_{}", blockchain_id_str, blockchain_data.validators).as_str(), &id()).unwrap();
+            Pubkey::create_with_seed(&self.bridge_authority, format!("blockchain_{}", source).as_str(), &id()).unwrap();
+
+        let signature_pubkey =
+            Pubkey::create_with_seed(&self.bridge_authority, format!("signature_{}_{}_{}", source, lock_id, signature_index).as_str(), &id()).unwrap();
+
+        let validator_pubkey =
+            Pubkey::create_with_seed(&self.bridge_authority, format!("validator_{}_{}", source, validator_index).as_str(), &id()).unwrap();
 
 
         let mut transaction = Transaction::new_with_payer(
@@ -195,12 +220,19 @@ impl BridgeContext {
                     &self.bridge.pubkey(),
                     &blockchain_pubkey,
                     &validator_pubkey,
-                    &validator_account,
-                    &program_context.payer.pubkey(),
+                    &lock_pubkey,
+                    &signature_pubkey,
                     &self.bridge_authority,
-                    blockchain_id_str,
-                    pubkey,
 
+                    &program_context.payer.pubkey(),
+                    signature,
+                    token_source,
+                    token_source_address,
+                    source,
+                    lock_id,
+                    destination,
+                    recipient,
+                    amount
                 )
                     .unwrap(),
             ],
@@ -217,7 +249,7 @@ impl BridgeContext {
             .await
             .unwrap();
 
-        validator_account
+        (lock_pubkey, signature_pubkey)
     }
 }
 
@@ -273,14 +305,40 @@ async fn add_signature_test() {
     bridge_context.add_blockchain(&mut program_context, String::from("ETH"), [1; 32]).await;
     let validator_pubkey = bridge_context.add_validator(&mut program_context, String::from("ETH"), [2; 32]).await;
 
-    let blockchain_pubkey =
-        Pubkey::create_with_seed(&self.bridge_authority, format!("blockchain_{}", blockchain_id_str).as_str(), &id()).unwrap();
+    let (lock_pubkey, signature_pubkey) = bridge_context.add_signature(&mut program_context,
+                                 [7; 65],
+                                 String::from("ETH"),
+                                 [3; 32],
+                                 String::from("ETH"),
+                                 1,
+                                 String::from("BSC"),
+                                 [4; 32],
+                                 10000,
+                                 0).await;
 
-    let validator_account = get_account(&mut program_context, &validator_pubkey).await;
-    let validator_data: Validator = Validator::try_from_slice(&validator_account.data).unwrap();
-    println!("{:?}", validator_data);
-    assert_eq!(validator_data.version, 1);
-    assert_eq!(validator_data.blockchain_id, [0x45, 0x54, 0x48, 0x0]);
-    assert_eq!(validator_data.index, 0);
-    assert_eq!(validator_data.pub_key, [2;32]);
+
+    let lock_account = get_account(&mut program_context, &lock_pubkey).await;
+    let lock_data: Lock = Lock::try_from_slice(&lock_account.data).unwrap();
+    println!("{:?}", lock_data);
+    assert_eq!(lock_data.version, 1);
+    assert_eq!(lock_data.index, 0);
+    assert_eq!(lock_data.lock_id, 1);
+    assert_eq!(lock_data.bridge, bridge_context.bridge.pubkey());
+    assert_eq!(lock_data.token_source_address, [3; 32]);
+    assert_eq!(lock_data.token_source, [0x45, 0x54, 0x48, 0x0]);
+    assert_eq!(lock_data.source, [0x45, 0x54, 0x48, 0x0]);
+    assert_eq!(lock_data.recipient, [4; 32]);
+    assert_eq!(lock_data.destination, [0x42, 0x53, 0x43, 0x0]);
+    assert_eq!(lock_data.amount, 10000);
+    assert_eq!(lock_data.signatures, 1);
+
+    let signature_account = get_account(&mut program_context, &signature_pubkey).await;
+    let signature_data: Signature = Signature::try_from_slice(&signature_account.data).unwrap();
+    println!("{:?}", signature_data);
+    assert_eq!(signature_data.version, 1);
+    assert_eq!(signature_data.index, 0);
+    assert_eq!(signature_data.bridge, bridge_context.bridge.pubkey());
+    assert_eq!(signature_data.sig_type, SigType::Lock);
+    assert_eq!(signature_data.signature, [7; 65]);
+    assert_eq!(signature_data.validator, validator_pubkey);
 }
