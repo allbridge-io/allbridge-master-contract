@@ -66,10 +66,7 @@ impl Blockchain {
     /// Struct size
     pub const LEN: usize = 77;
     /// Create new blockchain entity
-    pub fn new(bridge: Pubkey, blockchain_id_str: &str, contract_address: [u8; 32]) -> Self {
-        let id_len = blockchain_id_str.len();
-        let mut blockchain_id = [0; 4];
-        blockchain_id[..id_len].copy_from_slice(blockchain_id_str.as_bytes());
+    pub fn new(bridge: Pubkey, blockchain_id: [u8; 4], contract_address: [u8; 32]) -> Self {
         Self {
             version: PROGRAM_VERSION,
             bridge,
@@ -111,10 +108,7 @@ impl Validator {
     /// Struct size
     pub const LEN: usize = 77;
     /// Create new validator entity
-    pub fn new(blockchain_id_str: &str, index: u64, pub_key: [u8; 32], owner: Pubkey) -> Self {
-        let id_len = blockchain_id_str.len();
-        let mut blockchain_id = [0; 4];
-        blockchain_id[..id_len].copy_from_slice(blockchain_id_str.as_bytes());
+    pub fn new(blockchain_id: [u8; 4], index: u64, pub_key: [u8; 32], owner: Pubkey) -> Self {
         Self {
             version: PROGRAM_VERSION,
             blockchain_id,
@@ -174,19 +168,7 @@ impl Lock {
     /// Struct size
     pub const LEN: usize = 141;
     /// Create new validator entity
-    pub fn new(index: u64, lock_id: u64, bridge: Pubkey, token_source_address: [u8; 32], token_source_str: &str, source_str: &str, recipient: [u8; 32], destination_str: &str, amount: u64) -> Self {
-        let token_source_len = token_source_str.len();
-        let mut token_source = [0; 4];
-        token_source[..token_source_len].copy_from_slice(token_source_str.as_bytes());
-
-        let source_len = source_str.len();
-        let mut source = [0; 4];
-        source[..source_len].copy_from_slice(source_str.as_bytes());
-
-        let destination_str_len = destination_str.len();
-        let mut destination = [0; 4];
-        destination[..destination_str_len].copy_from_slice(destination_str.as_bytes());
-
+    pub fn new(index: u64, lock_id: u64, bridge: Pubkey, token_source_address: [u8; 32], token_source: [u8; 4], source: [u8; 4], recipient: [u8; 32], destination: [u8; 4], amount: u64) -> Self {
         Self {
             version: PROGRAM_VERSION,
             index,

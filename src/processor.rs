@@ -38,11 +38,12 @@ impl Processor {
 
     fn check_and_get_blockchain_account_seed(
         program_id: &Pubkey,
-        blockchain_id: &str,
+        blockchain_id: [u8; 4],
         bridge_authority: &Pubkey,
         blockchain_account: &Pubkey,
     ) -> Result<String, ProgramError> {
-        let seed = format!("blockchain_{}", blockchain_id);
+        let seed = format!("blockchain_{}", Self::chain_id_to_str(&blockchain_id)?);
+        msg!("Seed: {}", seed);
         let expected_blockchain_account =
             Pubkey::create_with_seed(bridge_authority, seed.as_str(), program_id)?;
         if expected_blockchain_account != *blockchain_account {
@@ -53,12 +54,12 @@ impl Processor {
 
     fn check_and_get_validator_account_seed(
         program_id: &Pubkey,
-        blockchain_id: &str,
+        blockchain_id: [u8; 4],
         index: u64,
         bridge_authority: &Pubkey,
         validator_account: &Pubkey,
     ) -> Result<String, ProgramError> {
-        let seed = format!("validator_{}_{}", blockchain_id, index);
+        let seed = format!("validator_{}_{}", Self::chain_id_to_str(&blockchain_id)?, index);
         let expected_validator_account =
             Pubkey::create_with_seed(bridge_authority, seed.as_str(), program_id)?;
         if expected_validator_account != *validator_account {
@@ -69,12 +70,12 @@ impl Processor {
 
     fn check_and_get_lock_account_seed(
         program_id: &Pubkey,
-        source: &str,
+        source: [u8; 4],
         lock_id: u64,
         bridge_authority: &Pubkey,
         lock_account: &Pubkey,
     ) -> Result<String, ProgramError> {
-        let seed = format!("lock_{}_{}", source, lock_id);
+        let seed = format!("lock_{}_{}", Self::chain_id_to_str(&source)?, lock_id);
         let expected_lock_account =
             Pubkey::create_with_seed(bridge_authority, seed.as_str(), program_id)?;
         if expected_lock_account != *lock_account {
@@ -85,13 +86,13 @@ impl Processor {
 
     fn check_and_get_signature_account_seed(
         program_id: &Pubkey,
-        source: &str,
+        source: [u8; 4],
         lock_id: u64,
         index: u64,
         bridge_authority: &Pubkey,
         signature_account: &Pubkey,
     ) -> Result<String, ProgramError> {
-        let seed = format!("signature_{}_{}_{}", source, lock_id, index);
+        let seed = format!("signature_{}_{}_{}", Self::chain_id_to_str(&source)?, lock_id, index);
         let expected_signature_account =
             Pubkey::create_with_seed(bridge_authority, seed.as_str(), program_id)?;
         if expected_signature_account != *signature_account {
@@ -105,6 +106,12 @@ impl Processor {
         let mut result = [0; 4];
         result[..str_len].copy_from_slice(str.as_bytes());
         result
+    }
+
+    fn chain_id_to_str(chain_id: &[u8; 4]) -> Result<&str, ProgramError> {
+        std::str::from_utf8(chain_id)
+            .map_err(|_| ProgramError::InvalidArgument)
+            .map(|s| s.trim_matches(0 as char))
     }
 
     fn create_account_with_seed<'a>(
@@ -178,7 +185,7 @@ impl Processor {
     pub fn process_add_blockchain(
         program_id: &Pubkey,
         accounts: &[AccountInfo],
-        blockchain_id_str: &str,
+        blockchain_id: [u8; 4],
         contract_address: [u8; 32]
     ) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
@@ -198,7 +205,7 @@ impl Processor {
 
         let seed = Self::check_and_get_blockchain_account_seed(
             program_id,
-            blockchain_id_str,
+            blockchain_id,
             bridge_authority_info.key,
             blockchain_account_info.key
         )?;
@@ -217,7 +224,7 @@ impl Processor {
 
         let blockchain = Blockchain::new(
             *bridge_account_info.key,
-            &blockchain_id_str.as_ref(),
+            blockchain_id,
             contract_address);
         blockchain.serialize(&mut *blockchain_account_info.data.borrow_mut())?;
         Ok(())
@@ -228,7 +235,7 @@ impl Processor {
     pub fn process_add_validator(
         program_id: &Pubkey,
         accounts: &[AccountInfo],
-        blockchain_id_str: &str,
+        blockchain_id: [u8; 4],
         pub_key: [u8; 32]
     ) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
@@ -257,7 +264,7 @@ impl Processor {
 
         let seed = Self::check_and_get_validator_account_seed(
             program_id,
-            blockchain_id_str,
+            blockchain_id,
             validator_index,
             bridge_authority_info.key,
             validator_account_info.key
@@ -281,7 +288,7 @@ impl Processor {
         blockchain_account_data.serialize(&mut *blockchain_account_info.data.borrow_mut())?;
 
         let validator = Validator::new(
-            blockchain_id_str,
+            blockchain_id,
             validator_index,
             pub_key,
             *payer_info.key);
@@ -295,11 +302,11 @@ impl Processor {
         program_id: &Pubkey,
         accounts: &[AccountInfo],
         signature: [u8; 65],
-        token_source: &str,
+        token_source: [u8; 4],
         token_source_address: [u8; 32],
-        source: &str,
+        source: [u8; 4],
         lock_id: u64,
-        destination: &str,
+        destination: [u8; 4],
         recipient: [u8; 32],
         amount: u64
     ) -> ProgramResult {
@@ -342,8 +349,7 @@ impl Processor {
             return Err(ProgramError::InvalidArgument);
         }
 
-        let source_hex = Self::str_to_hex(source);
-        if validator_account_data.blockchain_id != source_hex {
+        if validator_account_data.blockchain_id != source {
             msg!("Invalid validator type");
             return Err(ProgramError::InvalidArgument);
         }
@@ -449,15 +455,15 @@ impl Processor {
             },
             BridgeProgramInstruction::AddBlockchain {contract_address, blockchain_id} => {
                 msg!("Instruction: AddBlockchain");
-                Self::process_add_blockchain(program_id, accounts, blockchain_id.as_ref(), contract_address)
+                Self::process_add_blockchain(program_id, accounts, blockchain_id, contract_address)
             },
             BridgeProgramInstruction::AddValidator {blockchain_id, pub_key} => {
                 msg!("Instruction: AddBlockchain");
-                Self::process_add_validator(program_id, accounts, blockchain_id.as_ref(), pub_key)
+                Self::process_add_validator(program_id, accounts, blockchain_id, pub_key)
             }
             BridgeProgramInstruction::AddSignature {signature, token_source, token_source_address, source, lock_id, destination, recipient, amount} => {
                 msg!("Instruction: AddBlockchain");
-                Self::process_add_signature(program_id, accounts, signature, token_source.as_str(), token_source_address, source.as_str(), lock_id, destination.as_str(), recipient, amount)
+                Self::process_add_signature(program_id, accounts, signature, token_source, token_source_address, source, lock_id, destination, recipient, amount)
             }
         }
     }

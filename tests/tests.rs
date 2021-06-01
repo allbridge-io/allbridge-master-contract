@@ -286,7 +286,7 @@ async fn add_blockchain_test() {
 async fn add_validator_test() {
     let mut program_context = program_test().start_with_context().await;
     let bridge_context = BridgeContext::init(&mut program_context).await;
-    bridge_context.add_blockchain(&mut program_context, String::from("ETH"), [1; 32]).await;
+    let blockchain_pubkey = bridge_context.add_blockchain(&mut program_context, String::from("ETH"), [1; 32]).await;
     let validator_pubkey = bridge_context.add_validator(&mut program_context, String::from("ETH"), [2; 32]).await;
 
     let validator_account = get_account(&mut program_context, &validator_pubkey).await;
@@ -296,6 +296,10 @@ async fn add_validator_test() {
     assert_eq!(validator_data.blockchain_id, [0x45, 0x54, 0x48, 0x0]);
     assert_eq!(validator_data.index, 0);
     assert_eq!(validator_data.pub_key, [2;32]);
+
+    let blockchain_account = get_account(&mut program_context, &blockchain_pubkey).await;
+    let blockchain_data: Blockchain = Blockchain::try_from_slice(&blockchain_account.data).unwrap();
+    assert_eq!(blockchain_data.validators, 1);
 }
 
 #[tokio::test]

@@ -9,6 +9,14 @@ use solana_program::{
     system_program
 };
 
+fn str_to_chain_id(s: String) -> [u8; 4] {
+    let len = s.len();
+    let mut result = [0; 4];
+    result[..len].copy_from_slice(s.as_bytes());
+    result
+}
+
+
 /// Instruction definition
 #[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
 pub enum BridgeProgramInstruction {
@@ -21,7 +29,7 @@ pub enum BridgeProgramInstruction {
     ///Add new blockchain
     AddBlockchain {
         /// blockchain_id
-        blockchain_id: String,
+        blockchain_id: [u8; 4],
         /// contract_address
         contract_address: [u8; 32]
     },
@@ -29,7 +37,7 @@ pub enum BridgeProgramInstruction {
     ///Add new validator
     AddValidator {
         /// blockchain_id
-        blockchain_id: String,
+        blockchain_id: [u8; 4],
 
         ///Validator public key
         pub_key: [u8; 32],
@@ -41,19 +49,19 @@ pub enum BridgeProgramInstruction {
         signature: [u8; 65],
 
         /// token_source
-        token_source: String,
+        token_source: [u8; 4],
 
         /// token_source_address
         token_source_address: [u8; 32],
 
         /// source
-        source: String,
+        source: [u8; 4],
 
         /// lock_id
         lock_id: u64,
 
         /// destination
-        destination: String,
+        destination: [u8; 4],
 
         /// recipient
         recipient: [u8; 32],
@@ -95,7 +103,7 @@ pub fn add_blockchain(
     blockchain_id: String,
     contract_address: [u8; 32]
 ) -> Result<Instruction, ProgramError> {
-    let init_data = BridgeProgramInstruction::AddBlockchain {blockchain_id, contract_address};
+    let init_data = BridgeProgramInstruction::AddBlockchain {blockchain_id: str_to_chain_id(blockchain_id), contract_address};
     let data = init_data
         .try_to_vec()
         .or(Err(ProgramError::InvalidArgument))?;
@@ -125,7 +133,7 @@ pub fn add_validator(
     blockchain_id: String,
     pub_key: [u8; 32]
 ) -> Result<Instruction, ProgramError> {
-    let init_data = BridgeProgramInstruction::AddValidator {blockchain_id, pub_key};
+    let init_data = BridgeProgramInstruction::AddValidator {blockchain_id: str_to_chain_id(blockchain_id), pub_key};
     let data = init_data
         .try_to_vec()
         .or(Err(ProgramError::InvalidArgument))?;
@@ -164,7 +172,15 @@ pub fn add_signature(
     recipient: [u8; 32],
     amount: u64
 ) -> Result<Instruction, ProgramError> {
-    let init_data = BridgeProgramInstruction::AddSignature {signature, token_source, token_source_address, source, lock_id, destination, recipient, amount};
+    let init_data = BridgeProgramInstruction::AddSignature {
+        signature, token_source: str_to_chain_id(token_source),
+        token_source_address,
+        source: str_to_chain_id(source),
+        lock_id,
+        destination: str_to_chain_id(destination),
+        recipient,
+        amount
+    };
     let data = init_data
         .try_to_vec()
         .or(Err(ProgramError::InvalidArgument))?;
