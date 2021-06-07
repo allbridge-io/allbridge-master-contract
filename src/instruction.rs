@@ -60,8 +60,14 @@ pub enum BridgeProgramInstruction {
         /// lock_id
         lock_id: u64,
 
+        /// tx_id
+        tx_id: [u8; 64],
+
         /// destination
         destination: [u8; 4],
+
+        /// sender
+        sender: [u8; 32],
 
         /// recipient
         recipient: [u8; 32],
@@ -162,13 +168,21 @@ pub fn add_signature(
     lock_account: &Pubkey,
     signature_account: &Pubkey,
     bridge_authority: &Pubkey,
+    sender_user: &Pubkey,
+    sender_user_authority: &Pubkey,
+    recipient_user: &Pubkey,
+    recipient_user_authority: &Pubkey,
+    sent_lock: &Pubkey,
+    received_lock: &Pubkey,
     payer_account: &Pubkey,
     signature: [u8; 65],
     token_source: String,
     token_source_address: [u8; 32],
     source: String,
+    tx_id: [u8; 64],
     lock_id: u64,
     destination: String,
+    sender: [u8; 32],
     recipient: [u8; 32],
     amount: u64
 ) -> Result<Instruction, ProgramError> {
@@ -176,8 +190,10 @@ pub fn add_signature(
         signature, token_source: str_to_chain_id(token_source),
         token_source_address,
         source: str_to_chain_id(source),
+        tx_id,
         lock_id,
         destination: str_to_chain_id(destination),
+        sender,
         recipient,
         amount
     };
@@ -191,6 +207,12 @@ pub fn add_signature(
         AccountMeta::new(*lock_account, false),
         AccountMeta::new(*signature_account, false),
         AccountMeta::new_readonly(*bridge_authority, false),
+        AccountMeta::new(*sender_user, false),
+        AccountMeta::new_readonly(*sender_user_authority, false),
+        AccountMeta::new(*recipient_user, false),
+        AccountMeta::new_readonly(*recipient_user_authority, false),
+        AccountMeta::new(*sent_lock, false),
+        AccountMeta::new(*received_lock, false),
         AccountMeta::new_readonly(*payer_account, true),
         AccountMeta::new_readonly(sysvar::rent::id(), false),
         AccountMeta::new_readonly(system_program::id(), false)
