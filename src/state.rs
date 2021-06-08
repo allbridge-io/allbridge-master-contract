@@ -2,7 +2,17 @@
 //!
 use crate::PROGRAM_VERSION;
 use borsh::{BorshDeserialize, BorshSerialize};
-use solana_program::{program_pack::IsInitialized, pubkey::Pubkey};
+use solana_program::{
+    pubkey::Pubkey,
+    program_error::ProgramError,
+    entrypoint::ProgramResult,
+    msg
+};
+
+pub type TxId = [u8; 64];
+pub type Address = [u8; 32];
+pub type BlockchainId = [u8; 4];
+
 
 /// Information about the bridge
 #[repr(C)]
@@ -24,11 +34,16 @@ impl Bridge {
             owner,
         }
     }
-}
 
-impl IsInitialized for Bridge {
-    fn is_initialized(&self) -> bool {
-        self.version == PROGRAM_VERSION
+    pub fn check_initialized(&self, expect_initialized: bool) -> ProgramResult {
+        if expect_initialized && self.version != PROGRAM_VERSION {
+            msg!("Account not initialized");
+            return Err(ProgramError::UninitializedAccount);
+        } else if !expect_initialized && self.version == PROGRAM_VERSION {
+            msg!("Account already initialized");
+            return Err(ProgramError::AccountAlreadyInitialized);
+        }
+        Ok(())
     }
 }
 
@@ -43,7 +58,7 @@ pub struct Blockchain {
     pub bridge: Pubkey,
 
     /// Blockchain id (4 bytes of UTF-8)
-    pub blockchain_id: [u8; 4],
+    pub blockchain_id: BlockchainId,
 
     /// Number of validators
     pub validators: u64,
@@ -52,21 +67,15 @@ pub struct Blockchain {
     pub locks: u64,
 
     /// Address of contract for the bridge
-    pub contract_address: [u8; 32]
+    pub contract_address: Address
 
-}
-
-impl IsInitialized for Blockchain {
-    fn is_initialized(&self) -> bool {
-        self.version == PROGRAM_VERSION
-    }
 }
 
 impl Blockchain {
     /// Struct size
     pub const LEN: usize = 85;
     /// Create new blockchain entity
-    pub fn new(bridge: Pubkey, blockchain_id: [u8; 4], contract_address: [u8; 32]) -> Self {
+    pub fn new(bridge: Pubkey, blockchain_id: BlockchainId, contract_address: Address) -> Self {
         Self {
             version: PROGRAM_VERSION,
             bridge,
@@ -75,6 +84,17 @@ impl Blockchain {
             validators: 0,
             contract_address
         }
+    }
+
+    pub fn check_initialized(&self, expect_initialized: bool) -> ProgramResult {
+        if expect_initialized && self.version != PROGRAM_VERSION {
+            msg!("Account not initialized");
+            return Err(ProgramError::UninitializedAccount);
+        } else if !expect_initialized && self.version == PROGRAM_VERSION {
+            msg!("Account already initialized");
+            return Err(ProgramError::AccountAlreadyInitialized);
+        }
+        Ok(())
     }
 }
 
@@ -86,7 +106,7 @@ pub struct Validator {
     pub version: u8,
 
     /// Blockchain id (4 bytes of UTF-8)
-    pub blockchain_id: [u8; 4],
+    pub blockchain_id: BlockchainId,
 
     /// Validator index
     pub index: u64,
@@ -99,17 +119,11 @@ pub struct Validator {
 
 }
 
-impl IsInitialized for Validator {
-    fn is_initialized(&self) -> bool {
-        self.version == PROGRAM_VERSION
-    }
-}
-
 impl Validator {
     /// Struct size
     pub const LEN: usize = 77;
     /// Create new validator entity
-    pub fn new(blockchain_id: [u8; 4], index: u64, pub_key: [u8; 32], owner: Pubkey) -> Self {
+    pub fn new(blockchain_id: BlockchainId, index: u64, pub_key: [u8; 32], owner: Pubkey) -> Self {
         Self {
             version: PROGRAM_VERSION,
             blockchain_id,
@@ -117,6 +131,17 @@ impl Validator {
             pub_key,
             owner
         }
+    }
+
+    pub fn check_initialized(&self, expect_initialized: bool) -> ProgramResult {
+        if expect_initialized && self.version != PROGRAM_VERSION {
+            msg!("Account not initialized");
+            return Err(ProgramError::UninitializedAccount);
+        } else if !expect_initialized && self.version == PROGRAM_VERSION {
+            msg!("Account already initialized");
+            return Err(ProgramError::AccountAlreadyInitialized);
+        }
+        Ok(())
     }
 }
 
@@ -135,28 +160,28 @@ pub struct Lock {
     pub lock_id: u64,
 
     /// Lock transaction id
-    pub tx_id: [u8; 64],
+    pub tx_id: TxId,
 
     /// Bridge reference
     pub bridge: Pubkey,
 
     /// Token address from source blockchain
-    pub token_source_address: [u8; 32],
+    pub token_source_address: Address,
 
     /// Token source
-    pub token_source: [u8; 4],
+    pub token_source: BlockchainId,
 
     /// Source blockchain identifier
-    pub source: [u8; 4],
+    pub source: BlockchainId,
 
     /// Sender address
-    pub sender: [u8; 32],
+    pub sender: Address,
 
     /// Recipient address
-    pub recipient: [u8; 32],
+    pub recipient: Address,
 
     /// Destination blockchain identifier
-    pub destination: [u8; 4],
+    pub destination: BlockchainId,
 
     /// Amount to lock for the transfer
     pub amount: u64,
@@ -165,17 +190,11 @@ pub struct Lock {
     pub signatures: u64
 }
 
-impl IsInitialized for Lock {
-    fn is_initialized(&self) -> bool {
-        self.version == PROGRAM_VERSION
-    }
-}
-
 impl Lock {
     /// Struct size
     pub const LEN: usize = 237;
     /// Create new validator entity
-    pub fn new(index: u64, lock_id: u64, tx_id: [u8; 64], bridge: Pubkey, token_source_address: [u8; 32], token_source: [u8; 4], source: [u8; 4], sender: [u8; 32], recipient: [u8; 32], destination: [u8; 4], amount: u64) -> Self {
+    pub fn new(index: u64, lock_id: u64, tx_id: TxId, bridge: Pubkey, token_source_address: Address, token_source: BlockchainId, source: BlockchainId, sender: Address, recipient: Address, destination: BlockchainId, amount: u64) -> Self {
         Self {
             version: PROGRAM_VERSION,
             index,
@@ -191,6 +210,17 @@ impl Lock {
             amount,
             signatures: 0
         }
+    }
+
+    pub fn check_initialized(&self, expect_initialized: bool) -> ProgramResult {
+        if expect_initialized && self.version != PROGRAM_VERSION {
+            msg!("Account not initialized");
+            return Err(ProgramError::UninitializedAccount);
+        } else if !expect_initialized && self.version == PROGRAM_VERSION {
+            msg!("Account already initialized");
+            return Err(ProgramError::AccountAlreadyInitialized);
+        }
+        Ok(())
     }
 }
 
@@ -210,12 +240,6 @@ pub struct Signature {
     pub validator: Pubkey,
 }
 
-impl IsInitialized for Signature {
-    fn is_initialized(&self) -> bool {
-        self.version == PROGRAM_VERSION
-    }
-}
-
 impl Signature {
     /// Struct size
     pub const LEN: usize = 138;
@@ -232,6 +256,17 @@ impl Signature {
             validator,
         }
     }
+
+    pub fn check_initialized(&self, expect_initialized: bool) -> ProgramResult {
+        if expect_initialized && self.version != PROGRAM_VERSION {
+            msg!("Account not initialized");
+            return Err(ProgramError::UninitializedAccount);
+        } else if !expect_initialized && self.version == PROGRAM_VERSION {
+            msg!("Account already initialized");
+            return Err(ProgramError::AccountAlreadyInitialized);
+        }
+        Ok(())
+    }
 }
 
 
@@ -242,9 +277,9 @@ pub struct User {
     /// Data version
     pub version: u8,
     /// Blockchain ID
-    pub blockchain_id: [u8; 4],
+    pub blockchain_id: BlockchainId,
     /// User address
-    pub address: [u8; 32],
+    pub address: Address,
     /// Number of sent transactions
     pub sent: u64,
     /// Number of received transactions
@@ -255,8 +290,8 @@ impl User {
     /// Struct size
     pub const LEN: usize = 53;
     /// Create new validator entity
-    pub fn new(blockchain_id: [u8; 4],
-               address: [u8; 32]) -> Self {
+    pub fn new(blockchain_id: BlockchainId,
+               address: Address) -> Self {
         Self {
             version: PROGRAM_VERSION,
             blockchain_id,
@@ -267,26 +302,33 @@ impl User {
     }
 
     /// is initialized account method
-    pub fn is_initialized(&self) -> bool {
-        self.version == PROGRAM_VERSION
+    pub fn check_initialized(&self, expect_initialized: bool) -> ProgramResult {
+        if expect_initialized && self.version != PROGRAM_VERSION {
+            msg!("Account not initialized");
+            return Err(ProgramError::UninitializedAccount);
+        } else if !expect_initialized && self.version == PROGRAM_VERSION {
+            msg!("Account already initialized");
+            return Err(ProgramError::AccountAlreadyInitialized);
+        }
+        Ok(())
     }
 }
 
 /// Sent info
 #[repr(C)]
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize, PartialEq)]
-pub struct SentLock {
+pub struct LockTx {
     /// Data version
     pub version: u8,
     /// Lock transaction id
-    tx_id: [u8; 64]
+    pub tx_id: TxId
 }
 
-impl SentLock {
+impl LockTx {
     /// Struct size
     pub const LEN: usize = 65;
     /// Create new validator entity
-    pub fn new(tx_id: [u8; 64]) -> Self {
+    pub fn new(tx_id: TxId) -> Self {
         Self {
             version: PROGRAM_VERSION,
             tx_id
@@ -294,34 +336,14 @@ impl SentLock {
     }
 
     /// is initialized account method
-    pub fn is_initialized(&self) -> bool {
-        self.version == PROGRAM_VERSION
-    }
-}
-
-/// Received info
-#[repr(C)]
-#[derive(Clone, Debug, BorshSerialize, BorshDeserialize, PartialEq)]
-pub struct ReceivedLock {
-    /// Data version
-    pub version: u8,
-    /// Lock transaction id
-    tx_id: [u8; 64]
-}
-
-impl ReceivedLock {
-    /// Struct size
-    pub const LEN: usize = 65;
-    /// Create new validator entity
-    pub fn new(tx_id: [u8; 64]) -> Self {
-        Self {
-            version: PROGRAM_VERSION,
-            tx_id
+    pub fn check_initialized(&self, expect_initialized: bool) -> ProgramResult {
+        if expect_initialized && self.version != PROGRAM_VERSION {
+            msg!("Account not initialized");
+            return Err(ProgramError::UninitializedAccount);
+        } else if !expect_initialized && self.version == PROGRAM_VERSION {
+            msg!("Account already initialized");
+            return Err(ProgramError::AccountAlreadyInitialized);
         }
-    }
-
-    /// is initialized account method
-    pub fn is_initialized(&self) -> bool {
-        self.version == PROGRAM_VERSION
+        Ok(())
     }
 }
