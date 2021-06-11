@@ -18,4 +18,4 @@ pub mod entrypoint;
 pub use solana_program;
 
 // FIXME: change this address before run tests/program
-solana_program::declare_id!("6WLkPcR5UrhzrBjwb5aqmn1tF6ewmqVUnkRHFE1Hqphw");
+solana_program::declare_id!("2svg2dmcS8L3s2GyBBjfoeQW89Rx1zH3rkDC5EhmpXVi");

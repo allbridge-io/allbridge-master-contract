@@ -174,7 +174,8 @@ impl Processor {
         destination: BlockchainId,
         sender: Address,
         recipient: Address,
-        amount: u64
+        amount: u64,
+        revert: bool
     ) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
 
@@ -226,7 +227,8 @@ impl Processor {
         let lock_seed = check_and_get_lock_account_seed(
             program_id,
             source,
-            tx_id,
+            lock_id,
+            revert,
             bridge_authority_info.key,
             lock_account_info.key
         )?;
@@ -255,13 +257,38 @@ impl Processor {
                 msg!("Sent lock account is initialized");
                 return Err(ProgramError::AccountAlreadyInitialized);
             }
-            Self::create_lock_tx_account(program_id, source, payer_info, sent_lock_info, sender_user_authority_info, sender, sender_user_data.sent, tx_id, "sent", rent)?;
+            Self::create_lock_tx_account(program_id,
+                                         source,
+                                         payer_info,
+                                         sent_lock_info,
+                                         lock_account_info,
+                                         sender_user_authority_info,
+                                         sender,
+                                         sender_user_data.sent,
+                                         tx_id,
+                                         source,
+                                         lock_id,
+                                         false,
+                                         "sent", rent)?;
 
             if received_lock_info.lamports() > 0 {
                 msg!("Received lock account is initialized");
                 return Err(ProgramError::AccountAlreadyInitialized);
             }
-            Self::create_lock_tx_account(program_id, destination, payer_info, received_lock_info, recipient_user_authority_info, recipient, recipient_user_data.received, tx_id, "received", rent)?;
+            Self::create_lock_tx_account(program_id,
+                                         destination,
+                                         payer_info,
+                                         received_lock_info,
+                                         lock_account_info,
+                                         recipient_user_authority_info,
+                                         recipient,
+                                         recipient_user_data.received,
+                                         tx_id,
+                                         source,
+                                         lock_id,
+                                         false,
+                                         "received",
+                                         rent)?;
 
             sender_user_data.sent += 1;
             recipient_user_data.received += 1;
@@ -287,11 +314,27 @@ impl Processor {
 
         lock_account_data.check_initialized(true)?;
 
+        if
+            lock_account_data.lock_id != lock_id ||
+            lock_account_data.tx_id != tx_id ||
+            lock_account_data.token_source_address != token_source_address ||
+            lock_account_data.token_source != token_source ||
+            lock_account_data.source != source ||
+            lock_account_data.sender != sender ||
+            lock_account_data.recipient != recipient ||
+            lock_account_data.destination != destination ||
+            lock_account_data.amount != amount
+        {
+            msg!("Existing lock does not match with the params");
+            return Err(ProgramError::InvalidArgument);
+        }
+
         let signature_seed = check_and_get_signature_account_seed(
             program_id,
             source,
             lock_id,
             lock_account_data.signatures,
+            revert,
             bridge_authority_info.key,
             signature_account_info.key
         )?;
@@ -309,10 +352,12 @@ impl Processor {
         )?;
 
         let signature = Signature::new(
-            lock_account_data.signatures,
+            source,
+            lock_id,
             *bridge_account_info.key,
             signature,
-            *validator_account_info.key);
+            *validator_account_info.key,
+            validator_account_data.index);
         signature.serialize(&mut *signature_account_info.data.borrow_mut())?;
 
         lock_account_data.signatures += 1;
@@ -343,7 +388,20 @@ impl Processor {
         }
     }
 
-    fn create_lock_tx_account<'a>(program_id: &Pubkey, blockchain_id: BlockchainId, payer_info: &AccountInfo<'a>, lock_tx_info: &AccountInfo<'a>, user_authority_info: &AccountInfo<'a>, user_address: Address, index: u64, tx_id: TxId, tx_type: &str, rent: &Rent) -> ProgramResult {
+    fn create_lock_tx_account<'a>(
+        program_id: &Pubkey,
+        blockchain_id: BlockchainId,
+        payer_info: &AccountInfo<'a>,
+        lock_tx_info: &AccountInfo<'a>,
+        lock_info: &AccountInfo<'a>,
+        user_authority_info: &AccountInfo<'a>,
+        user_address: Address, index: u64,
+        tx_id: TxId,
+        source: BlockchainId,
+        lock_id: u64,
+        reverted: bool,
+        tx_type: &str,
+        rent: &Rent) -> ProgramResult {
         let bump_seed = validate_user_address_authority_and_get_bump_seed(program_id, user_address, user_authority_info.key)?;
         let seed = check_and_get_lock_tx_account_seed(program_id, blockchain_id, index, tx_type, user_authority_info.key, lock_tx_info.key)?;
 
@@ -359,7 +417,7 @@ impl Processor {
             bump_seed,
         )?;
 
-        LockTx::new(tx_id).serialize(&mut *lock_tx_info.data.borrow_mut())?;
+        LockTx::new(tx_id, source, lock_id, *lock_info.key, reverted).serialize(&mut *lock_tx_info.data.borrow_mut())?;
         Ok(())
     }
 
@@ -384,9 +442,9 @@ impl Processor {
                 msg!("Instruction: AddBlockchain");
                 Self::process_add_validator(program_id, accounts, blockchain_id, pub_key)
             }
-            BridgeProgramInstruction::AddSignature {signature, token_source, token_source_address, source, tx_id, lock_id, destination,sender,  recipient, amount} => {
+            BridgeProgramInstruction::AddSignature {signature, token_source, token_source_address, source, tx_id, lock_id, destination,sender,  recipient, amount, revert} => {
                 msg!("Instruction: AddBlockchain");
-                Self::process_add_signature(program_id, accounts, signature, token_source, token_source_address, source, tx_id, lock_id, destination, sender, recipient, amount)
+                Self::process_add_signature(program_id, accounts, signature, token_source, token_source_address, source, tx_id, lock_id, destination, sender, recipient, amount, revert)
             }
         }
     }

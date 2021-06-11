@@ -194,7 +194,7 @@ impl BridgeContext {
                                validator_index: u64) -> (Pubkey, Pubkey, Pubkey, Pubkey, Pubkey, Pubkey) {
 
         let lock_pubkey =
-            Pubkey::create_with_seed(&self.bridge_authority, format!("lock_{}_{}", source, &bs58::encode(&tx_id).into_string()[..20]).as_str(), &id()).unwrap();
+            Pubkey::create_with_seed(&self.bridge_authority, format!("lock_{}_{}", source, lock_id).as_str(), &id()).unwrap();
         let lock_account = program_context
             .banks_client
             .get_account(lock_pubkey)
@@ -279,7 +279,8 @@ impl BridgeContext {
                     destination,
                     sender,
                     recipient,
-                    amount
+                    amount,
+                    false
                 )
                     .unwrap(),
             ],
@@ -397,10 +398,12 @@ async fn add_signature_test() {
     let signature_data: Signature = Signature::try_from_slice(&signature_account.data).unwrap();
     println!("{:?}", signature_data);
     assert_eq!(signature_data.version, 1);
-    assert_eq!(signature_data.index, 0);
+    assert_eq!(signature_data.source, [0x45, 0x54, 0x48, 0x0]);
+    assert_eq!(signature_data.lock_id, 1);
     assert_eq!(signature_data.bridge, bridge_context.bridge.pubkey());
     assert_eq!(signature_data.signature, [7; 65]);
     assert_eq!(signature_data.validator, validator_pubkey);
+    assert_eq!(signature_data.validator_index, 0);
 
     let sender_account = get_account(&mut program_context, &sender_pubkey).await;
     let sender_data: User = User::try_from_slice(&sender_account.data).unwrap();
@@ -474,10 +477,12 @@ async fn add_signature_test() {
     let signature_data: Signature = Signature::try_from_slice(&signature_account.data).unwrap();
     println!("{:?}", signature_data);
     assert_eq!(signature_data.version, 1);
-    assert_eq!(signature_data.index, 1);
+    assert_eq!(signature_data.source, [0x45, 0x54, 0x48, 0x0]);
+    assert_eq!(signature_data.lock_id, 1);
     assert_eq!(signature_data.bridge, bridge_context.bridge.pubkey());
     assert_eq!(signature_data.signature, [17; 65]);
     assert_eq!(signature_data.validator, validator_pubkey);
+    assert_eq!(signature_data.validator_index, 0);
 
     let sender_account = get_account(&mut program_context, &sender_pubkey).await;
     let sender_data: User = User::try_from_slice(&sender_account.data).unwrap();

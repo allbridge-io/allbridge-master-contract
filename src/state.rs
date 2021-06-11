@@ -230,30 +230,38 @@ impl Lock {
 pub struct Signature {
     /// Data version
     pub version: u8,
-    /// Lock index within the bridge
-    pub index: u64,
+    /// Source blockchain identifier
+    pub source: BlockchainId,
+    /// Lock id
+    pub lock_id: u64,
     /// Bridge reference
     pub bridge: Pubkey,
     /// Oracle signature
     pub signature: [u8; 65],
     /// Validator public key
     pub validator: Pubkey,
+    /// Validator index
+    pub validator_index: u64
 }
 
 impl Signature {
     /// Struct size
-    pub const LEN: usize = 138;
+    pub const LEN: usize = 150;
     /// Create new validator entity
-    pub fn new(index: u64,
+    pub fn new(source: BlockchainId,
+               lock_id: u64,
                bridge: Pubkey,
                signature: [u8; 65],
-               validator: Pubkey) -> Self {
+               validator: Pubkey,
+               validator_index: u64) -> Self {
         Self {
             version: PROGRAM_VERSION,
-            index,
+            source,
+            lock_id,
             bridge,
             signature,
             validator,
+            validator_index
         }
     }
 
@@ -321,17 +329,29 @@ pub struct LockTx {
     /// Data version
     pub version: u8,
     /// Lock transaction id
-    pub tx_id: TxId
+    pub tx_id: TxId,
+
+    pub source: BlockchainId,
+
+    pub lock_id: u64,
+
+    pub lock_account: Pubkey,
+
+    pub reverted: bool
 }
 
 impl LockTx {
     /// Struct size
-    pub const LEN: usize = 65;
+    pub const LEN: usize = 110;
     /// Create new validator entity
-    pub fn new(tx_id: TxId) -> Self {
+    pub fn new(tx_id: TxId, source: BlockchainId, lock_id: u64, lock_account: Pubkey, reverted: bool) -> Self {
         Self {
             version: PROGRAM_VERSION,
-            tx_id
+            tx_id,
+            source,
+            lock_id,
+            lock_account,
+            reverted
         }
     }
 

@@ -67,7 +67,10 @@ pub enum BridgeProgramInstruction {
         recipient: Address,
 
         /// amount
-        amount: u64
+        amount: u64,
+
+        /// Is reverted transfer by user
+        revert: bool,
     },
 }
 
@@ -178,7 +181,8 @@ pub fn add_signature(
     destination: String,
     sender: Address,
     recipient: Address,
-    amount: u64
+    amount: u64,
+    revert: bool
 ) -> Result<Instruction, ProgramError> {
     let init_data = BridgeProgramInstruction::AddSignature {
         signature, token_source: str_to_chain_id(token_source.as_str()),
@@ -189,7 +193,8 @@ pub fn add_signature(
         destination: str_to_chain_id(destination.as_str()),
         sender,
         recipient,
-        amount
+        amount,
+        revert
     };
     let data = init_data
         .try_to_vec()
