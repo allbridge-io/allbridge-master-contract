@@ -333,7 +333,7 @@ impl Processor {
             program_id,
             source,
             lock_id,
-            lock_account_data.signatures,
+            validator_account_data.index,
             revert,
             bridge_authority_info.key,
             signature_account_info.key

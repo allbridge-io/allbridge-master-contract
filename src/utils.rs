@@ -60,12 +60,12 @@ pub fn check_and_get_signature_account_seed(
     program_id: &Pubkey,
     source: [u8; 4],
     lock_id: u64,
-    index: u64,
+    validator_id: u64,
     revert: bool,
     bridge_authority: &Pubkey,
     signature_account: &Pubkey,
 ) -> Result<String, ProgramError> {
-    let seed = format!("signature_{}_{}_{}_{}", (if revert {"revert"} else { "lock" }), chain_id_to_str(&source)?, lock_id, index);
+    let seed = format!("signature_{}_{}_{}_{}", (if revert {"revert"} else { "lock" }), chain_id_to_str(&source)?, lock_id, validator_id);
     check_and_get_account_seed(program_id, seed, bridge_authority, signature_account)
 
 }
